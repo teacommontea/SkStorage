@@ -1,7 +1,7 @@
 name: SkStorage
 version: '${version}'
 main: net.teacommontea.skstorage.SkStoragePlugin
-api-version: '1.21'
+api-version: '1.19'
 authors: [teacommontea]
 description: Modern SQLite-backed Skript variable storage with user-defined table routing, per-table UUID sharding, and built-in player metadata tracking.
 depend: [Skript]

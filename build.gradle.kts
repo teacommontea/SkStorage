@@ -61,7 +61,7 @@ data class Target(
     val javaRelease: Int,
 )
 
-val t = Target("1.21.11-R0.1-SNAPSHOT", "2.15.3", 21)
+val t = Target("1.20.4-R0.1-SNAPSHOT", "2.9.3", 17)
 
 repositories {
     mavenCentral()
@@ -91,8 +91,8 @@ dependencies {
     compileOnly("org.xerial:sqlite-jdbc:3.46.1.3")
     compileOnly("org.jetbrains:annotations:24.1.0")
     compileOnly("com.google.guava:guava:33.3.1-jre")
-    compileOnly("com.intellectualsites.plotsquared:plotsquared-core:7.5.12")
-    compileOnly("com.intellectualsites.plotsquared:plotsquared-bukkit:7.5.12") {
+    compileOnly("com.intellectualsites.plotsquared:plotsquared-core:7.3.8")
+    compileOnly("com.intellectualsites.plotsquared:plotsquared-bukkit:7.3.8") {
         isTransitive = false
     }
 

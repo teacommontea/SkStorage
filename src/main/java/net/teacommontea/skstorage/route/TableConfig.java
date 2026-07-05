@@ -20,6 +20,8 @@ public final class TableConfig {
         File dataDir = plugin.getDataFolder();
         int shardChars = cfg.getInt("player.shard-chars", 2);
 
+        boolean defaultPermanent = cfg.getBoolean("default_permanent", true);
+
         if (cfg.isSet("database") && !cfg.getBoolean("database", true)) {
             log.warning("Top-level database: false; persistence is disabled.");
             return false;
@@ -85,11 +87,12 @@ public final class TableConfig {
                 ", split_file_by_uuid=" + split + ", permanent=" + permanent + ")");
         }
 
-        Table def = new Table("default", false, true, Integer.MIN_VALUE,
+        Table def = new Table("default", false, defaultPermanent, Integer.MIN_VALUE,
             new File(dataDir, "default.db"), shardChars, sqliteOptions);
         router.setDefaultTable(def);
 
-        log.info("Routing built: " + tableCount + " table(s) + default.db");
+        log.info("Routing built: " + tableCount + " table(s) + default.db (permanent=" +
+            defaultPermanent + ")");
         return true;
     }
 }

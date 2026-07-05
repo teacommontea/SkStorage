@@ -40,10 +40,16 @@
 
 # Simple mode:
 simple_mode: false
-# Enable this mode if all these settings are too confusing and you just want 
-# to use an SQLite database inside of Skript. 
+# Enable this mode if all these settings are too confusing and you just want
+# to use an SQLite database inside of Skript.
 # Enabling this mode overrides all other database creations
 # and routes all database reads and writes to default.db.
+
+default_permanent: true
+# Whether the catch-all default.db is permanent (survives /skstorage clear).
+# true = anything not matching a table is kept forever.
+# false = default.db is wiped by /skstorage clear along with other non-permanent tables.
+# Ignored in simple_mode, where default.db is always permanent.
 
 # Default routing:
 player_table:
@@ -56,7 +62,6 @@ player_table:
 player:
   shard-chars: 2 # Number of characters to use for sharding player files when split_file_by_uuid is enabled. This should be set to a value that creates a reasonable number of files per directory based on your player count. For example, with 2 shard chars, each directory will contain up to 256 files (00-ff), which is suitable for servers with up to around 10,000 players. Adjust this value as needed based on your server's player count and filesystem performance.
   auto_discard_on_leave: 0 # In kilobytes, so 1024 = 1MB. This is the threshold for automatically discarding player variables when they leave the server. Set to 0 to disable auto-discarding.
-  background_load_files_per_tick: 1 # Number of player files to load per server tick during startup. Adjust this based on your server's performance and the number of player files you have. Setting it to a higher number can speed up startup, but may cause lag if set too high.
   preload_players: false # Allows the server to be locked until all player variables have loaded
 
 # Other integrations
@@ -105,7 +110,6 @@ commands:
 
 # Experimental features
 experimental:
-  use_bigdecimal: false # Whether to use BigDecimal for numbers instead of double. This is slower but more precise, and may be required for some integrations.
   threaded_file_io: false # Whether to use a separate thread for file I/O. This can improve performance on large servers, but may cause issues with some plugins that expect synchronous file access.
   ignore_invalid_files: true 
   # Disabling ignore_invalid_files will cause the plugin to throw an error
@@ -117,10 +121,6 @@ experimental:
   disable_wal: false # Whether to disable Write-Ahead Logging (WAL) for SQLite. This can improve performance, but may cause data loss in the event of a crash. Use with caution.
   silently_error_soft: false # Silences non-critical errors that the plugin can recover from.
   silently_error_hard: false # Silences ALL errors in console. Don't do this.
-  # In order to use BigDecimal, you must turn on skip Skript math below:
-skript:
-  skip_math: false # Whether to skip Skript's built-in math handling. This is required for BigDecimal support, but may break some scripts that rely on Skript's math behavior. Use with caution.
-# Note that enabling this feature may break some Skript compatibility, as Skript's math handling is not always consistent with Java's BigDecimal behavior. Use with caution and test your scripts thoroughly.
 
 convert_csv:
   enabled: false 

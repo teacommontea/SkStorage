@@ -3,8 +3,8 @@ import net.teacommontea.skstorage.util.Log;
 
 import ch.njol.skript.Skript;
 import ch.njol.skript.variables.Variables;
-import net.teacommontea.skstorage.bignum.BigNumModule;
 import net.teacommontea.skstorage.command.SkStorageCommand;
+import net.teacommontea.skstorage.math.SkNumModule;
 import net.teacommontea.skstorage.playerdata.ExprPlayerData;
 import net.teacommontea.skstorage.playerdata.PlayerDataListener;
 import net.teacommontea.skstorage.playerdata.PlayerDataStore;
@@ -73,19 +73,9 @@ public final class SkStoragePlugin extends JavaPlugin {
 
         try {
             Skript.registerAddon(this);
-            BigNumModule.register();
-            getLogger().info("Registered BigNum type (signed int128)");
+            SkNumModule.register(getLogger());
         } catch (Throwable th) {
-            Log.hard("Failed to register BigNum", th);
-        }
-
-        boolean useBigDecimal = getConfig().getBoolean("experimental.use_bigdecimal", false);
-        boolean skipMath = getConfig().getBoolean("skript.skip_math", false);
-        if (useBigDecimal && !skipMath) {
-            Log.hard("experimental.use_bigdecimal is true but skript.skip_math is false. " +
-                "BigDecimal needs skip_math to avoid silent double demotion. NOT installing BigDecimal math.");
-        } else if (useBigDecimal) {
-            net.teacommontea.skstorage.bignum.SkipMath.install(getLogger());
+            Log.hard("Failed to register exact math engine", th);
         }
 
         SkStorageCommand cmd = new SkStorageCommand(this);
