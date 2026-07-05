@@ -20,6 +20,31 @@ public final class ConfigUpdater {
 
     private ConfigUpdater() {}
 
+    private static final List<String> DEAD_KEYS = List.of(
+        "skip_math"
+    );
+
+    public static List<String> prune(JavaPlugin plugin) {
+        List<String> removed = new ArrayList<>();
+        Path userFile = plugin.getDataFolder().toPath().resolve("config.yml");
+        if (!Files.exists(userFile)) return removed;
+
+        Set<String> userKeys;
+        try {
+            userKeys = topLevelKeys(Files.readString(userFile, StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            Log.soft("ConfigUpdater: cannot read config.yml for prune: " + e.getMessage());
+            return removed;
+        }
+
+        for (String key : DEAD_KEYS) {
+            if (userKeys.contains(key) && removeTopLevelKey(plugin, key)) {
+                removed.add(key);
+            }
+        }
+        return removed;
+    }
+
     public static List<String> sync(JavaPlugin plugin) {
         List<String> added = new ArrayList<>();
         Path userFile = plugin.getDataFolder().toPath().resolve("config.yml");

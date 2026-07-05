@@ -51,6 +51,12 @@ default_permanent: true
 # false = default.db is wiped by /skstorage clear along with other non-permanent tables.
 # Ignored in simple_mode, where default.db is always permanent.
 
+exact_math: true
+# Whether SkStorage handles all Skript number math with its exact engine.
+# true = numbers never silently overflow, truncate, or lose precision.
+# false = Skript's built-in math is used instead. WARNING: with this off,
+# large numbers can silently corrupt when saved. A warning is printed on load.
+
 # Default routing:
 player_table:
   database: true

@@ -23,6 +23,17 @@ public final class SkStoragePlugin extends JavaPlugin {
     @Nullable private IpHasher ipHasher;
     @Nullable private BukkitTask flushTask;
 
+    @Nullable private volatile String availableUpdateVersion;
+
+    public void setAvailableUpdateVersion(@Nullable String version) {
+        this.availableUpdateVersion = version;
+    }
+
+    @Nullable
+    public String getAvailableUpdateVersion() {
+        return availableUpdateVersion;
+    }
+
     public static SkStoragePlugin get() {
         return instance;
     }
@@ -32,11 +43,18 @@ public final class SkStoragePlugin extends JavaPlugin {
         instance = this;
         saveDefaultConfig();
 
+        java.util.List<String> removed = net.teacommontea.skstorage.util.ConfigUpdater.prune(this);
         java.util.List<String> added = net.teacommontea.skstorage.util.ConfigUpdater.sync(this);
-        if (!added.isEmpty()) {
+        if (!removed.isEmpty() || !added.isEmpty()) {
             reloadConfig();
-            getLogger().info("Config updater appended " + added.size() +
-                " missing block(s): " + String.join(", ", added));
+            if (!removed.isEmpty()) {
+                getLogger().info("Config updater removed " + removed.size() +
+                    " retired key(s): " + String.join(", ", removed));
+            }
+            if (!added.isEmpty()) {
+                getLogger().info("Config updater appended " + added.size() +
+                    " missing block(s): " + String.join(", ", added));
+            }
         }
 
         Variables.registerStorage(SkStorageRouter.class, "skstorage");
@@ -71,11 +89,16 @@ public final class SkStoragePlugin extends JavaPlugin {
             getLogger().info("Player data tracking disabled in config.");
         }
 
-        try {
-            Skript.registerAddon(this);
-            SkNumModule.register(getLogger());
-        } catch (Throwable th) {
-            Log.hard("Failed to register exact math engine", th);
+        if (getConfig().getBoolean("exact_math", true)) {
+            try {
+                Skript.registerAddon(this);
+                SkNumModule.register(getLogger());
+            } catch (Throwable th) {
+                Log.hard("Failed to register exact math engine", th);
+            }
+        } else {
+            getLogger().warning("Math is being processed by Skript. " +
+                "Variables may be inadvertently corrupted when saving.");
         }
 
         SkStorageCommand cmd = new SkStorageCommand(this);
@@ -125,6 +148,10 @@ public final class SkStoragePlugin extends JavaPlugin {
             getLogger().info("experimental.threaded_file_io: I/O is already off-thread " +
                 "(Skript write thread + async flush); no extra I/O thread added.");
         }
+
+        getServer().getPluginManager().registerEvents(
+            new net.teacommontea.skstorage.util.UpdateNotifyListener(this), this);
+        net.teacommontea.skstorage.util.UpdateChecker.checkAsync(this);
 
         getLogger().info("SkStorage enabled.");
     }
