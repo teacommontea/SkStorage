@@ -266,7 +266,7 @@ public final class SkStorageCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(PFX + ERR + "Database is not killed.");
             return;
         }
-        boolean del = plugin.getConfig().getBoolean("automatically_delete_disabled_db_on_startup", true);
+        boolean del = plugin.getConfig().getBoolean("experimental.automatically_delete_disabled_db_on_startup", true);
         r.revive(plugin.getDataFolder(), del);
         sender.sendMessage(PFX + ACT + "Database revived. Real tables reopened" +
             (del ? "; _disabled.db deleted." : "; _disabled.db kept (toggle off)."));

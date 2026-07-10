@@ -199,7 +199,7 @@ public final class SkStorageRouter extends VariablesStorage {
 
             File dataDir = SkStoragePlugin.get().getDataFolder();
             if (SkStoragePlugin.get().getConfig()
-                    .getBoolean("automatically_delete_disabled_db_on_startup", true)) {
+                    .getBoolean("experimental.automatically_delete_disabled_db_on_startup", true)) {
                 File orphan = new File(dataDir, "_disabled.db");
                 if (orphan.exists()) {
                     deleteDisabledDb(dataDir);

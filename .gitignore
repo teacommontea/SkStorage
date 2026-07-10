@@ -10,6 +10,7 @@ build/
 
 server-jars/
 strip_comments.py
+BUILD_CYCLE.md
 
 secret.key
 *.db

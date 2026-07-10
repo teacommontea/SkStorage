@@ -107,15 +107,14 @@ commands:
 # You can also drop "Privileged" from the end of the permission to respect this config's routing rules.
 # Operators bypass all permissions, including the routing rules, and can use all commands regardless of their permissions.
 
-# Killing the database layer live will route all variables to a 
-# _disabled.db file. When the database is revived, _disabled.db will be deleted permanently.
-# Skript will be under the impression that the variables tables are still active
-# even though it will be routing to a stub. This is intentional.
-# To prevent SkStorage from deleting _disabled.db on startup or revival, swap the toggle below
-  automatically_delete_disabled_db_on_startup: true 
-
 # Experimental features
 experimental:
+  # Killing the database layer live will route all variables to a
+  # _disabled.db file. When the database is revived, _disabled.db will be deleted permanently.
+  # Skript will be under the impression that the variables tables are still active
+  # even though it will be routing to a stub. This is intentional.
+  # To prevent SkStorage from deleting _disabled.db on startup or revival, swap the toggle below.
+  automatically_delete_disabled_db_on_startup: true
   threaded_file_io: false # Whether to use a separate thread for file I/O. This can improve performance on large servers, but may cause issues with some plugins that expect synchronous file access.
   ignore_invalid_files: true 
   # Disabling ignore_invalid_files will cause the plugin to throw an error
