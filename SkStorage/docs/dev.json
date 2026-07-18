@@ -1,0 +1,302 @@
+{
+  "count": 27,
+  "entries": [
+    {
+      "title": "/skstorage admin command",
+      "excerpt": "The /skstorage (alias /skst) command hub that dispatches every admin subcommand and enforces per-command permissions and config toggles.",
+      "detail": "Implements CommandExecutor and TabCompleter for the /skstorage command. onCommand validates the first argument against the known subcommand list (stats, who, clear, reload, migrate, flatline, kill, alive, merge, route), runs the permission and config gate via allowed(), then dispatches to the matching handler. allowed() checks both the plain and Privileged permission for the subcommand (or the AdminCommands umbrella): a Privileged permission bypasses all config toggles, while a plain permission still respects the commands.<sub> config value, which can be enabled, disabled, or console_only. The reload and alive subcommands are always available (ALWAYS_ON) so a misconfiguration can never soft-lock the server. Tab completion suggests subcommands and the migrate source type. The class also owns shared message-formatting color constants, a byte-size humanizer, a UUID resolver (accepting a raw UUID, a tracked name, or a cached OfflinePlayer), and short confirmation tokens used to require a second confirming invocation for destructive commands.",
+      "webEquivalent": "An admin CLI or dashboard route table with role-based access control, where each subcommand is an endpoint gated by a permission and a feature flag.",
+      "notes": "Permission names follow SkStorage.<Sub>Command and SkStorage.<Sub>CommandPrivileged, matching plugin.yml. Operators bypass permission checks. Individual subcommands are documented on their own handler methods.",
+      "caveats": "Config toggles only constrain holders of the plain (non-Privileged) permission; a Privileged holder or operator can always run a command regardless of the commands.<sub> setting.",
+      "package": "command",
+      "class": "SkStorageCommand",
+      "member": "SkStorageCommand"
+    },
+    {
+      "title": "LiteBans Forget-On-Ban Hook",
+      "excerpt": "Purges a player's stored variables from every table when they receive a permanent LiteBans ban.",
+      "detail": "Optional integration gated by litebans.forget_on_ban in config and the presence of the LiteBans plugin. When enabled, registers a LiteBans Events.Listener whose entryAdded callback fires on new ban records. It only acts on entries whose type is 'ban' and that are permanent; temporary bans, mutes, kicks, and warnings are ignored. For IP bans it resolves all accounts sharing that IP via LiteBans' Database.getUsersByIP (failures logged softly and tolerated); it also always includes the entry's own UUID when present. The collected UUIDs are deduplicated, then a main-thread task calls SkStorageRouter.purgeUuidEverywhere for each one, summing the units removed. A summary line is logged when anything was actually purged. Registration failures are caught and logged softly so a missing or incompatible LiteBans API never crashes startup.",
+      "webEquivalent": "A GDPR-style account erasure webhook that wipes all of a banned user's stored data across services when a ban event fires.",
+      "notes": "softdepend on LiteBans in plugin.yml. The purge runs on the main server thread to stay consistent with the router's threading expectations.",
+      "caveats": "Only permanent bans of type 'ban' trigger a purge; temporary or non-ban punishments do nothing. Purged variables are deleted permanently and are not recoverable if the ban is later lifted. IP-ban user resolution depends on LiteBans' database and is skipped silently if it errors.",
+      "package": "litebans",
+      "class": "LiteBansHook",
+      "member": "LiteBansHook"
+    },
+    {
+      "title": "Exact arithmetic operations",
+      "excerpt": "The arithmetic kernel of the exact math engine: add, subtract, multiply, divide, power, negate, abs, and difference on SkNum values with automatic type promotion.",
+      "detail": "Stateless helpers that implement each operation with a tiered strategy that keeps values exact and as narrow as possible. When both operands are plain longs it uses Math.addExact/subtractExact/multiplyExact and promotes to BigInteger only on overflow; multiplication also has a fast path that turns multiplication by a power of two into a bit shift when it cannot overflow. When both operands are integers (long or BigInteger) it computes in BigInteger; otherwise it computes in BigDecimal. Division stays exact when it divides evenly, otherwise falls back to a rounded quotient using the shared 50-digit HALF_UP MathContext and marks the result rounded. Exponentiation handles integer exponents exactly via BigInteger/BigDecimal pow (including negative exponents as reciprocals), guards against exponents too large to evaluate, and falls back to double Math.pow (rounded) only for non-integer exponents. negate, abs, and difference are derived from the above and preserve the exact representation. A rounded flag propagates through operations so a value that ever lost exactness stays marked.",
+      "webEquivalent": "The core operations of a big-decimal or rational arithmetic library, comparable to BigDecimal/BigInteger method chains or decimal.js operations with a fixed rounding context.",
+      "notes": "Consumed by SkNumModule, which registers these methods as Skript's arithmetic operations. The long fast paths and power-of-two shift exist purely for performance on the common small-integer case.",
+      "caveats": "Division by zero and 0 raised to a negative power throw ArithmeticException. Non-integer exponents route through double Math.pow, so those results are inherently rounded (flagged as such) rather than exact, and an infinite or NaN power throws.",
+      "package": "math",
+      "class": "SkMath",
+      "member": "SkMath"
+    },
+    {
+      "title": "SkNum exact number type",
+      "excerpt": "An immutable arbitrary-precision number that backs SkStorage's exact math engine, avoiding the silent overflow and precision loss of primitive doubles.",
+      "detail": "An immutable Number/Comparable that internally stores a value as one of three kinds: a primitive long (fast path), a BigInteger (exact large integers), or a BigDecimal (exact decimals). Factory methods (ofLong, ofBigInteger, ofBigDecimal, fromNumber, parse) normalize to the narrowest representation that stays exact: BigIntegers small enough collapse to long, and BigDecimals with no fractional part collapse to integer kinds. fromNumber converts any Java Number, rejecting NaN and infinity and lifting doubles to exact form. It exposes value queries (isInteger, isZero, signum, isRounded, fitsInLong) and lossless conversions (toBigDecimal, toBigInteger) alongside the lossy Number conversions (intValue, longValue, floatValue, doubleValue). Equality and ordering are value-based across kinds (compareTo/equals compare numeric value regardless of representation, and hashCode is computed on the trailing-zero-stripped BigDecimal so equal numbers hash alike). The nested Config holds the shared MathContext (50-digit precision, HALF_UP rounding) used by the wider math engine. The rounded flag records when a BigDecimal value resulted from a rounded operation.",
+      "webEquivalent": "A big-number or decimal library value such as JavaScript's BigInt plus decimal.js, or Java's BigDecimal, used so financial or large-integer values never lose precision.",
+      "notes": "Backs the exact_math config option; when enabled SkStorage routes Skript number math through this type instead of Skript's native math. ZERO, ONE, and TEN are shared constants.",
+      "caveats": "equals is consistent with compareTo (value equality across representations), so it deliberately ignores the kind and the rounded flag. The lossy Number conversions (longValue, doubleValue, etc.) can still overflow or lose precision by design, since they exist for interoperability.",
+      "package": "math",
+      "class": "SkNum",
+      "member": "SkNum"
+    },
+    {
+      "title": "Exact math engine registration",
+      "excerpt": "Wires the SkNum exact number type into Skript, overriding built-in number arithmetic so calculations never silently lose precision.",
+      "detail": "register() installs the whole exact math engine into Skript in one call. registerClassInfo registers SkNum as a Skript type (\"sknum\", user pattern \"sknums?\"/\"big num\") with a parser and a Yggdrasil serializer that persists the number as its exact string plus a rounded flag and rejects mutation (SkNum is immutable). registerSkNumArithmetic registers add/subtract/multiply/divide/exponentiation and difference operations for SkNum-SkNum and mixed SkNum-Number pairs, plus a ZERO default. registerNumberOverride replaces Skript's built-in Number arithmetic operators by wrapping operands into SkNum, delegating to SkMath, and unwrapping the result back to the narrowest Number kind, so ordinary Skript number math transparently runs through the exact engine. registerComparators and registerConverters register ordering and Number<->SkNum conversion. Finally evictArithmeticCaches reflectively clears Skript's CACHED_OPERATIONS and CACHED_CONVERTED_OPERATIONS maps so the newly registered operations take effect immediately rather than after a cache miss.",
+      "webEquivalent": "A monkey-patch or plugin registration step that swaps a language's default numeric operators for a big-decimal implementation, similar to overriding operator handlers in an expression engine.",
+      "notes": "Invoked once during plugin startup and gated by the exact_math config option. The registration order matters: types before operations before cache eviction.",
+      "caveats": "evictArithmeticCaches depends on Skript-internal field names via reflection; on a Skript build where those fields are absent or renamed it logs a warning and the override may not take effect until first use. Registering a Number operator that Skript already registered is caught and ignored.",
+      "package": "math",
+      "class": "SkNumModule",
+      "member": "SkNumModule"
+    },
+    {
+      "title": "CSV Converter",
+      "excerpt": "One-time import of Skript's legacy variables.csv file into the default.db table.",
+      "detail": "Runs at startup only when convert_csv.enabled is true in config. Locates Skript's variable dump by looking for variables.csv (or variables.csv.bak) inside the sibling plugins/Skript directory. Streams the file line by line, skipping blank lines and comment lines beginning with '#', and parses each row with a quote-aware CSV regex that unescapes doubled quotes. Each row is expected to hold name, type, and a hex-encoded value; the value is decoded from hex (rejecting odd-length or non-hex strings) and rows missing a name, type, or value are skipped. Every valid row is written into the router's default.db table via Table.save, then the table is flushed once at the end. Regardless of outcome, the convert_csv key is removed from config.yml through ConfigUpdater.removeTopLevelKey and the config is reloaded, so the conversion can only ever run once. Old CSV files are intentionally left on disk for the operator to remove manually after verifying the import.",
+      "webEquivalent": "A one-shot CSV bulk-import script, like COPY FROM in PostgreSQL or a spreadsheet import wizard that disables itself after running.",
+      "notes": "All rows go into default.db regardless of routing patterns. Intended mainly for development migration to .db format, not general production use.",
+      "caveats": "Self-deleting: the config key is stripped after the first run whether or not the CSV existed, so re-running requires re-adding convert_csv to config. Does not delete the source CSV files. If the default table is unavailable or the file read fails, the import aborts (in the read-failure case the config key may already have been left in place).",
+      "package": "migrate",
+      "class": "CsvConverter",
+      "member": "CsvConverter"
+    },
+    {
+      "title": "SQLibrary Migrator",
+      "excerpt": "Imports a legacy PatPeter SQLibrary variables21 table into SkStorage's routed tables.",
+      "detail": "Backs the /skstorage migrate command. Opens the supplied SQLite source file directly via a jdbc:sqlite connection and reads the legacy variables21 table (columns name, type, value). Supports two modes. Dry-run scans every row, lowercases each variable name with Locale.ENGLISH, routes it through SkStorageRouter.route, and reports how many rows would land in each destination table (or UNROUTED when no table matches) without writing anything. Live mode runs asynchronously on a BukkitRunnable, guarded by a static AtomicBoolean so only one migration can run at a time; it routes and saves each row through Table.save, tallies written and skipped counts, emits a throughput update (rows/sec) every 10000 written rows, and on completion schedules SkStorageRouter.flushAll on the main thread. Rows with a null name, no matching table, or a failed save are skipped. Player-facing progress and result messages are always dispatched back onto the main thread via tell. A server restart is recommended after a live run so file handles close cleanly.",
+      "webEquivalent": "A one-off database import / ETL job, similar to a Rails db:migrate data backfill or a mysqldump-to-new-schema import.",
+      "notes": "Requires the 'skstorage' database to be registered in Skript so the router is available; otherwise the migration aborts early. The RUNNING flag is static, so the single-migration lock is process-wide.",
+      "caveats": "Reads exclusively from a table literally named variables21; other legacy schemas are not supported. Skipped rows are counted but not individually reported in live mode. Because the source file is opened with a raw JDBC connection, it is not deleted or closed by SkStorage's own connection pool, hence the restart recommendation.",
+      "package": "migrate",
+      "class": "SqlibraryMigrator",
+      "member": "SqlibraryMigrator"
+    },
+    {
+      "title": "Player Metadata Tracker",
+      "excerpt": "Records join and quit activity to maintain each player's tracked profile.",
+      "detail": "A Bukkit listener registered at MONITOR priority so it observes final join/quit state without influencing it. On PlayerJoinEvent it stamps the current time, remembers the session start in an in-memory sessionStarts map keyed by UUID, optionally computes a salted hash of the connecting IP via IpHasher (only when hashing is enabled and an address is present), and calls PlayerDataStore.recordJoin with the UUID, name, timestamp, and optional IP hash. It then attempts to read the player's skin 'textures' profile property from their Paper PlayerProfile and cache it through PlayerDataStore.cacheHeadTextures; any failure there is swallowed so texture caching never breaks the join. On PlayerQuitEvent it removes the stored session start, computes the elapsed session length (clamped to at least zero, or zero if no start was recorded), captures the player's current world name, and calls PlayerDataStore.recordQuit to fold that session into total playtime and session counts. This is the ingestion side that feeds the data exposed by the playerdata expression and the /skstorage who command.",
+      "webEquivalent": "Web analytics / session tracking middleware that logs sign-in and sign-out events to update a user's 'last seen' and cumulative usage stats.",
+      "notes": "The session-start map is memory-only; a server crash between join and quit loses that session's duration. Controlled by playerdata.enabled in config, which governs whether this listener is registered.",
+      "caveats": "Session length is measured from the join event on the current server instance only, so a quit with no recorded start (for example after a live reload) contributes zero playtime. IP hashing is skipped entirely when the hasher is disabled or the address is unavailable.",
+      "package": "playerdata",
+      "class": "PlayerDataListener",
+      "member": "PlayerDataListener"
+    },
+    {
+      "title": "Player metadata store",
+      "excerpt": "SQLite-backed tracker for per-player metadata: first/last join, playtime, session count, last world, name history, hashed last IP, and cached head textures.",
+      "detail": "Owns a dedicated SQLite database with two WITHOUT ROWID tables: players (keyed by UUID) and name_history (keyed by UUID+name). ensureSchema creates the tables and indexes and additively migrates newer columns (head_textures, head_signature, head_cached_at) via tolerant ALTER TABLE statements that ignore duplicate-column errors, so older databases upgrade in place. recordJoin upserts the player row (updating name and last_join, incrementing total_sessions, and coalescing the last IP hash) and records the current name in name_history. recordQuit updates last_quit, adds the session duration to total_playtime, and stores the last world. get returns a PlayerRecord snapshot; lookupUuid resolves an exact name (case-insensitive) to a UUID; searchByPartialName returns NameMatch results for a case-insensitive name prefix across name history (for tab completion and fuzzy /who lookups). cacheHeadTextures/getHeadTextures persist and read a player's base64 skin texture value, signature, and cache timestamp so player heads can be rendered without a live Mojang lookup. All mutating and reading methods are synchronized and swallow SQL errors to avoid disrupting gameplay, and close() checkpoint-truncates the WAL before closing.",
+      "webEquivalent": "A users table plus an audit/history table in a web app's database, similar to tracking sign-up date, last-seen, session count, and a username-change log, with a cached avatar blob.",
+      "notes": "Backs the /skstorage who command and playerdata features (config playerdata.enabled). The last IP is stored only as a hash, never in plaintext. Playtime and timestamps are epoch milliseconds.",
+      "caveats": "SQL failures are silently ignored (methods return null or no-op), so a corrupt or locked database degrades gracefully rather than surfacing errors. total_playtime accuracy depends on recordQuit being called with a correct session duration; a crash or kick that skips the quit event loses that session's playtime.",
+      "package": "playerdata",
+      "class": "PlayerDataStore",
+      "member": "PlayerDataStore"
+    },
+    {
+      "title": "PlotSquared Cleanup Hook",
+      "excerpt": "Deletes stored variables tied to a plot when that plot is removed in PlotSquared.",
+      "detail": "Optional integration gated by plotsquared.cleanup_on_delete in config and the presence of the PlotSquared plugin. When enabled, registers itself with PlotSquared's event dispatcher via a Guava @Subscribe listener. On PostPlotDeleteEvent it reads the deleted plot's world name and plot id, then schedules a main-thread task that calls SkStorageRouter.purgeByGlobEverywhere twice: once with a glob wrapping the world name ('*world*') and once wrapping the plot id string ('*id*'), summing the rows deleted across all tables. A summary line is logged only when something was actually removed. Registration failures are caught and logged softly so a missing or incompatible PlotSquared API never crashes startup.",
+      "webEquivalent": "A cascade-delete or cleanup webhook that removes orphaned records when a parent resource (here, a plot) is destroyed.",
+      "notes": "softdepend on PlotSquared in plugin.yml. Ships disabled by default (cleanup_on_delete: false) because the glob match is broad.",
+      "caveats": "Matching is a substring glob on world name and plot id, so any variable name containing that world name or plot id substring will be purged, even if it is unrelated to the deleted plot. Deletions are permanent. The purge is dispatched to the main thread to match the router's threading model.",
+      "package": "plotsquared",
+      "class": "PlotSquaredHook",
+      "member": "PlotSquaredHook"
+    },
+    {
+      "title": "SkStorage variable router",
+      "excerpt": "Skript VariablesStorage implementation that routes each variable to the correct table by pattern precedence and drives load, save, and flush.",
+      "detail": "Subclasses Skript's VariablesStorage and registers itself as the storage backend for variables. It holds a list of Route entries (each pairing a Table with a VariablePattern, an index, and a declaration order) plus an optional default catch-all Table. addRoute keeps the route list sorted by descending index then descending declaration order, so route(name) returns the highest-precedence matching table and falls back to the default table when nothing matches. load_i builds the tables from config via TableConfig.build, optionally removes an orphaned _disabled.db, opens every table, installs an accept-all name pattern through SkriptReflect, loads every stored variable back into Skript, and registers itself on the plugin. save() routes the incoming write to the correct table. routeExplain returns an Explain record describing which table, pattern, and index a name would resolve to without writing, backing the /skstorage route command. connect/disconnect/close/flushAll manage the lifecycle of all owned tables.",
+      "webEquivalent": "A request router or reverse-proxy rule table that dispatches keys to backends by longest-prefix or highest-priority match, with a default upstream.",
+      "notes": "requiresFile returns false because this backend manages its own files rather than a single Skript-supplied database file. The accept pattern is forced to .* so Skript hands every variable to this storage.",
+      "caveats": "Route precedence ties are broken by declaration order (last defined wins). If no default table is configured and a name matches nothing, save returns false and the write is silently dropped.",
+      "package": "route",
+      "class": "SkStorageRouter",
+      "member": "SkStorageRouter"
+    },
+    {
+      "title": "Live database kill and revive (flatline)",
+      "excerpt": "Safely suspends the storage layer at runtime by flushing and closing all tables and diverting further writes to a throwaway _disabled.db, then restores them on revive.",
+      "detail": "kill() flushes and closes every real table, then opens a single permanent stub table named _disabled backed by _disabled.db and flips the killed flag. While killed, route() returns the stub so Skript keeps writing normally but all writes land in the throwaway file, and routeExplain reports the killed state. revive() flushes and closes the stub, optionally deletes _disabled.db (and its -shm/-wal sidecars) via deleteDisabledDb, reopens all real tables, and clears the flag. This lets an operator take the database offline for a safe plugin reload without stopping the server, without Skript noticing the backend is gone.",
+      "webEquivalent": "Putting a service into maintenance mode behind a null sink, then draining and restoring it, similar to toggling a feature flag that routes traffic to a no-op backend.",
+      "notes": "Exposed to operators through the /skstorage kill and /skstorage alive commands. Both methods are synchronized to prevent overlapping kill/revive transitions.",
+      "caveats": "Writes made while killed go to _disabled.db and are discarded on revive (or on startup cleanup); they are intentionally not merged back into the real tables.",
+      "package": "route",
+      "class": "SkStorageRouter",
+      "member": "kill"
+    },
+    {
+      "title": "Player profile merge by UUID",
+      "excerpt": "Moves every stored variable belonging to one UUID onto another UUID across all tables, re-routing each moved variable to its correct destination table.",
+      "detail": "Flushes all pending writes, collects every raw row whose name contains fromUuid from every table, and for each row rewrites the name by replacing fromUuid with toUuid. Each rewritten name is re-routed through route() so it lands in whatever table now matches it, skipping rows whose name is unchanged and rows that already exist at the destination (existing target values are never overwritten). After saving the moved rows it flushes again and purges every trace of fromUuid from all tables, returning the number of variables moved.",
+      "webEquivalent": "A database account-merge or identity-consolidation job that reassigns all records from one primary key to another and deletes the source.",
+      "notes": "Backs the /skstorage merge command used to combine two player profiles, for example after an account UUID change.",
+      "caveats": "Destructive: the source UUID's data is deleted after the move. Collisions are resolved in favor of the destination, so a variable already present on toUuid is kept and the fromUuid copy is discarded.",
+      "package": "route",
+      "class": "SkStorageRouter",
+      "member": "mergeUuid"
+    },
+    {
+      "title": "Table (SQLite variable store)",
+      "excerpt": "A single routing table backed by one or many SQLite database files, with buffered writes and optional per-UUID sharding.",
+      "detail": "Represents one configured routing table and owns its SQLite persistence. In single-file mode the table keeps one Handle (a Connection plus a StringDict type dictionary and prepared upsert/delete statements) against its location file. In split_file_by_uuid mode the location is a directory and each row's UUID is extracted (UuidExtractor.firstUuid), hashed into a shardChars-length subdirectory, and stored in a dedicated <uuid>.db shard; open shard handles are kept in an access-ordered LinkedHashMap bounded by MAX_OPEN_HANDLES (256) with least-recently-used eviction. Writes are staged into a per-handle pending map (save) and applied in batches on flush/close/clear via drain, which commits the upsert and delete batches. The schema is a WITHOUT ROWID variables table keyed by name with an integer type_id (resolved through the StringDict) and a BLOB value; ItemStack values are intercepted and re-encoded through BukkitItemCodec. Read paths (loadAll, reloadUuid, readRowsContaining, has, rowCount) deserialize values back into Skript objects using Classes.deserialize, dropping rows whose type is unknown or fails to deserialize unless ignoreInvalid is set. Maintenance operations include purgeUuid (drop a shard file or GLOB-delete matching rows), purgeByGlob, clear, diskBytes/rowCount stats (counting -shm and -wal sidecar files), and checkpoint-truncate on close.",
+      "webEquivalent": "A per-tenant database shard or table with a write-behind buffer and an LRU connection pool, similar to a sharded key-value store partitioned by a tenant key.",
+      "notes": "split_file_by_uuid requires every variable name to contain a UUID; non-UUID names in a split table are logged as hard errors and dropped. shardChars controls how many leading UUID characters form the subdirectory name (config player.shard-chars).",
+      "caveats": "Writes are not durable until drain() runs on flush, close, clear, or purge; a crash before draining loses pending writes. rowCount returns -1 on SQL failure. All public operations synchronize on a single lock, so heavy concurrent access to one table serializes.",
+      "package": "route",
+      "class": "Table",
+      "member": "Table"
+    },
+    {
+      "title": "Table configuration builder",
+      "excerpt": "Reads config.yml and constructs the router's tables, patterns, and default catch-all from user-defined table sections.",
+      "detail": "build() scans the plugin config for user-defined table sections and registers each as a route on the SkStorageRouter. It first honors a top-level database: false (persistence disabled, returns false) and simple_mode (a single permanent default.db table that ignores all other definitions). Otherwise it iterates every top-level config key, skipping a reserved set of non-table sections (player, litebans, plotsquared, playerdata, experimental, skript, convert_csv), any section flagged example: true, and any section lacking database: true. For each valid table it requires a non-empty patterns string, parses it into a VariablePattern, and reads split_file_by_uuid, permanent, and index. A split_file_by_uuid table whose pattern is not UUID-keyed is downgraded to single-file with a warning. It builds the Table (a directory location when split, otherwise a <key>.db file), adds the route with an incrementing declaration order for tie-breaking, and finally always registers a default.db catch-all whose permanence follows default_permanent. SQLite behavior (WAL, file locking) and shard character count are pulled from config and passed through to each Table.",
+      "webEquivalent": "A configuration loader or dependency-injection wiring step that turns declarative config into runtime routing rules, similar to parsing a routes or virtual-hosts file into handler objects.",
+      "notes": "Reserved keys correspond to plugin subsystem config sections rather than storage tables. declOrder is passed to addRoute so that later-declared tables win ties at equal index.",
+      "caveats": "Malformed table sections (missing or unparseable patterns) are skipped with a warning rather than failing the load. simple_mode overrides every other table definition.",
+      "package": "route",
+      "class": "TableConfig",
+      "member": "TableConfig"
+    },
+    {
+      "title": "Variable routing pattern",
+      "excerpt": "Compiles a table's configured pattern string into a regex that decides which variable names route to that table.",
+      "detail": "Parses a config pattern (for example \"pd::\", \"server::\", or \"*uuid of %player%::\") into a compiled anchored regex. A leading \"*\" wildcard is expanded to an optional run of leading segments so the pattern can match anywhere in the variable path. The body is split on the Skript list separator \"::\" into segments: literal segments are quoted verbatim, segments containing a Skript expression placeholder \"%...%\" become a single-segment wildcard that matches any characters except \"::\", and a placeholder segment that mentions \"uuid\" is compiled to the canonical 8-4-4-4-12 UUID regex and flags the pattern as UUID-keyed. A trailing empty segment (open pattern ending in \"::\") is expanded to match any number of deeper sub-segments. matches() tests a candidate variable name against the compiled pattern, and isUuidKeyed() reports whether the pattern binds to a UUID (used to validate split_file_by_uuid tables).",
+      "webEquivalent": "A URL route pattern or glob-to-regex compiler, similar to Express route patterns or Ant-style path matchers, where segments and wildcards map onto a regular expression.",
+      "notes": "The UUID-keyed flag lets the router reject split_file_by_uuid tables whose pattern does not actually contain a UUID, since UUID sharding requires a UUID in every name.",
+      "caveats": "A placeholder is only treated as a UUID when the segment literally contains the text \"uuid\"; other %player%-style placeholders match any non-separator text rather than a strict UUID. parse() returns null and logs a hard error if the pattern compiles to invalid regex.",
+      "package": "route",
+      "class": "VariablePattern",
+      "member": "VariablePattern"
+    },
+    {
+      "title": "SkStorage Plugin Bootstrap",
+      "excerpt": "Main plugin entry point that wires up every SkStorage subsystem during server startup and shutdown.",
+      "detail": "The JavaPlugin subclass that owns SkStorage's lifecycle. On onLoad it saves the default config, runs the ConfigUpdater prune/sync passes to remove retired keys and append missing blocks, then registers the skstorage Skript variable storage type so Skript can route variables through SkStorageRouter. On onEnable it conditionally initializes player data tracking (IpHasher plus PlayerDataStore plus PlayerDataListener plus the playerdata Skript expression), registers the exact math engine (SkNumModule) when exact_math is enabled or warns about potential variable corruption when it is not, wires the /skstorage command executor and tab completer, registers the PlotSquared and LiteBans soft-dependency hooks when present, schedules a repeating asynchronous router flush task every four ticks, kicks off a one-time CSV conversion once the router is up when convert_csv is enabled, registers the update-notify listener, and starts the asynchronous update check. On onDisable it cancels the flush task, flushes the router, and closes the player data store. Holds a static singleton accessor and exposes getters/setters for the router, player data store, and the available update version banner.",
+      "webEquivalent": "The application entry point and dependency-injection composition root of a web app, akin to a framework's main() or a Spring @SpringBootApplication that boots services on startup and tears them down on shutdown.",
+      "notes": "The static instance is set in onLoad and retrieved elsewhere via SkStoragePlugin.get(). The router is injected later by the storage layer via setRouter rather than being constructed here.",
+      "caveats": "The playerdata Skript expression is only registered while Skript still accepts registrations; if Skript stops accepting them early the expression is unavailable, though auto-tracking and /skstorage who continue to work. experimental.threaded_file_io is intentionally a no-op because I/O already runs off-thread.",
+      "package": "skstorage",
+      "class": "SkStoragePlugin",
+      "member": "SkStoragePlugin"
+    },
+    {
+      "title": "Bukkit Item Codec",
+      "excerpt": "Serializes Skript item variables into native Bukkit item bytes so items survive being saved to and loaded from the database intact.",
+      "detail": "A stateless codec for turning Skript itemtype and itemstack variable values into a stable byte representation and back. isItemType recognizes the Skript type strings itemtype and itemstack. toItemStack coerces a live variable value into a cloned ItemStack (unwrapping an ItemType via getRandom). encode uses ItemStack.serializeAsBytes and decode uses ItemStack.deserializeBytes, giving full-fidelity NBT-aware round-tripping instead of Skript's default representation. toItemType rewraps a decoded stack back into a Skript ItemType. The nested Result value type reports whether the codec intercepted a write and carries the type marker and value bytes; intercept is the main entry point used by the storage layer: for an item-typed variable it reads the current live value via SkriptReflect, serializes it, and returns an intercepted Result stamped with the TYPE_MARKER (_skstorage_bukkit_item), otherwise it returns a passthrough Result leaving the original type and bytes untouched. All encode/decode failures degrade gracefully to null or passthrough.",
+      "webEquivalent": "A custom serializer/deserializer registered on a data store, similar to a JPA AttributeConverter or a Jackson custom (de)serializer that swaps a rich domain object for a portable binary blob on the way to and from storage.",
+      "notes": "The TYPE_MARKER constant is the sentinel type string persisted alongside the bytes so the load path knows a value was produced by this codec rather than by Skript's normal serialization.",
+      "caveats": "Serialized item bytes are tied to Bukkit's item format and may not deserialize cleanly across major server versions. intercept relies on reading the current live variable value through reflection, so it only intercepts values still resolvable at write time.",
+      "package": "util",
+      "class": "BukkitItemCodec",
+      "member": "BukkitItemCodec"
+    },
+    {
+      "title": "Config Migrator",
+      "excerpt": "Keeps an existing config.yml in sync with the bundled defaults by pruning retired keys and appending newly added blocks.",
+      "detail": "A stateless utility invoked during plugin load to reconcile the user's on-disk config.yml against the version shipped inside the jar. prune removes any top-level keys listed in the DEAD_KEYS set (currently only skip_math) so retired options do not linger. sync compares the top-level keys of the bundled resource against the user's file and text-appends any missing top-level block, comment lines and all, preserving the original formatting rather than round-tripping through a YAML serializer. Blocks are located and sliced with a hand-rolled line scanner (extractTopLevelBlock) that treats an unindented non-comment key line as the start of the next block and carries along trailing indented lines and inline comments. Top-level keys are read via a real YamlConfiguration parse with a manual line-scan fallback if parsing throws. Both entry points return the list of keys they changed so the caller can log and trigger a reloadConfig.",
+      "webEquivalent": "A schema/config migration step run at boot, similar to a database migration runner or a dotfile merge tool that adds new default settings and drops deprecated ones without clobbering user edits.",
+      "notes": "Newly appended blocks are copied verbatim from the bundled config.yml, so their default values and explanatory comments are preserved. All failures are logged softly and treated as no-ops so a config read/write error never blocks startup.",
+      "caveats": "Only top-level keys are reconciled; changes to nested keys within an already-present block are not detected or migrated. The text-based block extraction assumes the shipped config.yml keeps one blank line between top-level blocks.",
+      "package": "util",
+      "class": "ConfigUpdater",
+      "member": "ConfigUpdater"
+    },
+    {
+      "title": "IP Hasher",
+      "excerpt": "Turns a player's IP address into an irreversible keyed hash so player metadata can note repeat addresses without ever storing the real IP.",
+      "detail": "A privacy-preserving hasher used by the player data tracking system when track_last_ip_hash is enabled. On construction it either stays disabled (hashing returns null) or loads a 32-byte HMAC secret from secret.key in the plugin data folder, generating a fresh cryptographically random key with SecureRandom and locking it down to owner read/write POSIX permissions on the first run. hash normalizes the incoming address by resolving it through InetAddress.getByName to a canonical host address (falling back to the raw string on failure), then computes an HmacSHA256 over the UTF-8 bytes keyed by the secret and returns the lowercase hex digest. Because the digest is keyed and one-way, two logins from the same address produce the same token while the original IP can never be recovered.",
+      "webEquivalent": "Salted/keyed hashing of PII before persistence, like HMAC-fingerprinting an email or IP for deduplication and analytics under GDPR-style data-minimization rather than storing the raw value.",
+      "notes": "The keyed HMAC design means the token is stable and comparable across sessions yet is worthless if the database leaks without the separately stored secret.key. POSIX permission tightening is skipped silently on filesystems that do not support it (such as Windows).",
+      "caveats": "Disabled by default; when disabled all hash calls return null. If secret.key is deleted or regenerated, every previously stored hash becomes uncorrelatable with new logins.",
+      "package": "util",
+      "class": "IpHasher",
+      "member": "IpHasher"
+    },
+    {
+      "title": "Logging Facade",
+      "excerpt": "Central logging helper that routes SkStorage messages through Skript and honors the config's error-silencing toggles.",
+      "detail": "A stateless facade over Skript's logging with severity tiers whose visibility is gated by the experimental error-silencing config flags. soft emits a recoverable warning through Skript.warning, prefixed with [SkStorage], and is suppressed when either experimental.silently_error_soft or experimental.silently_error_hard is set. hard emits an error through Skript.error and is suppressed only by experimental.silently_error_hard; an overload additionally appends a Throwable's message and prints its stack trace. info logs an ordinary informational line through the plugin's own java.util.logging Logger and is never silenced. The flag lookups read live from the plugin config each call via the SkStoragePlugin singleton, defaulting to false and to visible output when the plugin instance is not yet available.",
+      "webEquivalent": "A logging wrapper with configurable log levels, similar to an SLF4J/Logback facade whose thresholds are driven by runtime configuration to mute lower-severity output.",
+      "notes": "silently_error_hard implies silently_error_soft, so enabling the hard silence hides both tiers. info is intentionally exempt from all silencing so lifecycle messages always appear.",
+      "caveats": "Silencing errors can mask real problems; the config documents silently_error_hard as strongly discouraged. Because flags are read per call, changing them at runtime takes effect immediately.",
+      "package": "util",
+      "class": "Log",
+      "member": "Log"
+    },
+    {
+      "title": "Skript Reflection Bridge",
+      "excerpt": "Reaches into Skript's non-public variable internals via reflection so the storage layer can drive variable loading and routing.",
+      "detail": "A stateless reflection shim that exposes three otherwise-inaccessible Skript hooks. A static initializer resolves and unlocks VariablesStorage.variableNamePattern and Variables.variableLoaded once at class load, throwing ExceptionInInitializerError with a version-incompatibility message if either member is missing. setNamePattern writes the private variableNamePattern field on a storage instance, letting SkStorage control which variable names a storage claims. variableLoaded invokes Skript's package-private variableLoaded to notify the engine that a variable has been read in from storage, returning its boolean result. getVariable lazily resolves and caches the private Variables.getVariable(String, Event, boolean) method and calls it to fetch the current live value of a variable by name, returning null if the method is absent on this Skript build. Reflection failures are wrapped in RuntimeExceptions with descriptive messages.",
+      "webEquivalent": "A reflection-based adapter against a third-party library's private API, similar to using Java reflection or a bytecode bridge to call internal framework methods that were never exposed publicly.",
+      "notes": "The name-pattern field and variableLoaded method are resolved eagerly at class load so incompatibility surfaces immediately; getVariable is resolved lazily and cached in a volatile field on first use.",
+      "caveats": "Tightly coupled to Skript's internal field and method names; a Skript update that renames or removes any of them breaks this bridge (eagerly for the first two, returning null for getVariable). Depends on the JVM permitting setAccessible on these members.",
+      "package": "util",
+      "class": "SkriptReflect",
+      "member": "SkriptReflect"
+    },
+    {
+      "title": "SQLite Connection Factory",
+      "excerpt": "Opens tuned SQLite connections for SkStorage's database files and provides a WAL checkpoint helper.",
+      "detail": "A stateless factory that centralizes how every SkStorage SQLite connection is opened and tuned. open builds a jdbc:sqlite URL for the given file, optionally appending nolock=1 when skipFileLocking is set, then applies a battery of PRAGMAs: WAL journal mode with synchronous=NORMAL and wal_autocheckpoint=1000 by default, or DELETE journal mode with synchronous=FULL when disableWal is requested; plus temp_store=MEMORY, a 16 MiB mmap_size, a 2048 KiB cache_size, and a 5000 ms busy_timeout. Auto-commit is disabled so callers manage transactions explicitly. The Options record carries the disableWal and skipFileLocking toggles (surfaced from the experimental config section) and provides a DEFAULT of both-off; a convenience open overload uses it. checkpointTruncate commits any pending work and runs PRAGMA wal_checkpoint(TRUNCATE) to fold the WAL back into the main file and shrink it, silently ignoring closed or failing connections.",
+      "webEquivalent": "A database connection factory or datasource configuration layer, analogous to a connection-pool builder that stamps consistent PRAGMA/session settings and isolation behavior onto every connection it hands out.",
+      "notes": "Connections are returned with auto-commit off, so callers are responsible for committing or rolling back. The disableWal and skipFileLocking options map to the experimental config flags of the same intent and carry the same performance-versus-durability tradeoffs described there.",
+      "caveats": "skipFileLocking (nolock=1) can corrupt data if multiple processes touch the same file, and disableWal reduces crash durability; both are experimental. checkpointTruncate swallows SQL errors, so a failed checkpoint is silent.",
+      "package": "util",
+      "class": "SqliteSetup",
+      "member": "SqliteSetup"
+    },
+    {
+      "title": "String Dictionary",
+      "excerpt": "A SQLite-backed string interning table that maps repeated strings to compact integer ids to shrink stored data.",
+      "detail": "A per-connection interning dictionary over a single SQLite table. On construction it creates the backing table if absent (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT UNIQUE NOT NULL), prepares reusable insert and select statements, and eagerly loads the entire existing id/value set into two in-memory HashMaps for both directions of lookup. getOrInsert returns the cached id for a known string, or performs an INSERT OR IGNORE followed by a SELECT to obtain the id assigned to a new value, caching both directions before returning it; it throws if the row cannot be read back. get resolves an id back to its string from the reverse cache, and size reports how many distinct strings are interned. Implements AutoCloseable to release its prepared statements.",
+      "webEquivalent": "A dictionary-encoding / string-interning lookup table, like a normalized reference table or the dictionary encoding columnar databases use to replace repeated string values with small integer codes.",
+      "notes": "The full table is cached in memory at construction, so reads never hit the database and only genuinely new strings incur a write. The UNIQUE constraint plus INSERT OR IGNORE makes getOrInsert idempotent.",
+      "caveats": "Not thread-safe; it is intended to be owned by a single connection and accessed from that connection's thread. Closing releases the prepared statements but not the underlying Connection, which is owned elsewhere.",
+      "package": "util",
+      "class": "StringDict",
+      "member": "StringDict"
+    },
+    {
+      "title": "Update Checker",
+      "excerpt": "Checks GitHub for a newer SkStorage release on startup and warns the server owner when an update is available.",
+      "detail": "A stateless utility that asynchronously queries the GitHub latest-release API for the SkStorage repository, parses the tag_name from the JSON response with a regex, and compares its semantic version against the locally running plugin version. Versions are reduced to major/minor/patch integer triples via a (\\d+)\\.(\\d+)\\.(\\d+) match, and a strict left-to-right comparison decides whether the remote is newer. When it is, the leading v prefix is stripped, the version is stashed on the plugin via setAvailableUpdateVersion (for the join-time notify listener to surface), and a warning pointing to the SpigotMC resource page is logged. The HTTP fetch uses a plain HttpURLConnection with a GitHub Accept header, a custom User-Agent, and five-second connect and read timeouts. spigotUrl exposes the download URL for reuse by the notify listener.",
+      "webEquivalent": "A client-side version-check ping on app launch, like a desktop application polling a releases endpoint and showing an 'update available' banner.",
+      "notes": "Runs entirely on an async scheduler task so it never blocks the main server thread. Every failure path (bad local version, network error, non-200 response, missing tag, unparseable remote version) silently returns and leaves the plugin running the current version.",
+      "caveats": "Only performs the check; it never downloads or installs anything. A non-standard version string that does not match the three-part numeric pattern is ignored.",
+      "package": "util",
+      "class": "UpdateChecker",
+      "member": "UpdateChecker"
+    },
+    {
+      "title": "Update Notification On Join",
+      "excerpt": "Tells admins when they join if a newer version of SkStorage is available to download.",
+      "detail": "A Bukkit listener registered at MONITOR priority. On PlayerJoinEvent it checks SkStoragePlugin.getAvailableUpdateVersion; if no update is pending (null) it does nothing. Otherwise it only notifies players who hold the SkStorage.AdminCommands permission or are operators. The message is built as a MiniMessage string that includes the new version number and a clickable, hover-annotated Spigot download link produced by UpdateChecker.spigotUrl, deserialized through a shared MiniMessage instance and sent as an Adventure Component. The available-version value is populated elsewhere by the update checker; this class only surfaces it in chat.",
+      "webEquivalent": "The 'a new version is available' banner shown to admins on login, like the update notice in a CMS dashboard such as WordPress.",
+      "notes": "Uses MiniMessage/Adventure for the clickable link. Non-admin, non-op players never see the notice.",
+      "caveats": "Only shows the notice if the plugin has already detected an update; it performs no version check itself. No throttling, so a qualifying admin sees the message on every join while an update remains available.",
+      "package": "util",
+      "class": "UpdateNotifyListener",
+      "member": "UpdateNotifyListener"
+    },
+    {
+      "title": "UUID Extractor",
+      "excerpt": "Finds a canonical player UUID embedded in a variable name.",
+      "detail": "Stateless utility built around a compiled regex matching the canonical 8-4-4-4-12 hyphenated UUID form (case-insensitive hex). firstUuid returns the first UUID substring found in the given string, or null when none is present. containsUuid reports whether any UUID appears. This supports per-table UUID sharding and UUID-scoped purges by pulling the owning player's identifier out of a Skript variable name so it can be routed to the correct sharded file or targeted for deletion.",
+      "webEquivalent": "A regex-based ID extractor that pulls a resource identifier out of a URL or key string.",
+      "notes": "Matches only the canonical hyphenated 36-character UUID format; compact (undashed) UUIDs are not recognised. Returns only the first match even if a name contains several.",
+      "caveats": "Any 8-4-4-4-12 hex sequence matches, so a hex string that merely looks like a UUID would be treated as one. Does not validate the UUID version or variant bits.",
+      "package": "util",
+      "class": "UuidExtractor",
+      "member": "UuidExtractor"
+    }
+  ]
+}

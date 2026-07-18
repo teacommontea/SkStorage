@@ -1,0 +1,89 @@
+{
+  "count": 11,
+  "entries": [
+    {
+      "title": "/skstorage stats",
+      "excerpt": "Shows how much storage each table is using and how busy it is.",
+      "detail": "Prints a summary of every storage table: how many entries it holds, how much disk space it takes up, how many files it currently has open, and how many saves it has handled since the server started. A grand total is shown at the bottom. If storage has been temporarily shut off, the header is marked so you know the numbers reflect a paused state.",
+      "webEquivalent": "A database status or usage dashboard showing per-table row counts and storage size.",
+      "notes": "Useful for spotting a table that is growing unusually large or being written to very heavily."
+    },
+    {
+      "title": "/skstorage who",
+      "excerpt": "Looks up the tracked history of a player by name or unique ID.",
+      "detail": "Given a player name or unique ID, shows what is known about that player: their current name and ID, when they first joined, when they last joined and last left, their total playtime and number of sessions, the last world they were in, and a privacy-preserving hash of their last IP. If you type only part of a name, up to five possible matches are listed so you can pick the right one.",
+      "webEquivalent": "A user profile or account lookup page in an admin panel.",
+      "notes": "Requires player data tracking to be turned on. The IP is only ever shown as a hash, never as a real address.",
+      "caveats": "Only players who have joined since tracking was enabled will have a record."
+    },
+    {
+      "title": "/skstorage clear",
+      "excerpt": "Wipes every non-permanent storage table after a confirmation step.",
+      "detail": "Erases all data held in tables that are not marked permanent. Permanent tables and the fallback default storage are left untouched. Because this is destructive, running it once gives you a one-time confirmation code; you must run the command again with that code to actually wipe the data. It reports how many tables were cleared.",
+      "webEquivalent": "A bulk delete or reset action guarded by a type-to-confirm prompt.",
+      "notes": "Whether a table survives this command is set by its permanent option in the config.",
+      "caveats": "The wipe cannot be undone once confirmed. Back up your data first if you are unsure."
+    },
+    {
+      "title": "/skstorage reload",
+      "excerpt": "Reloads the plugin's configuration file without restarting.",
+      "detail": "Re-reads the config.yml settings so tweaks take effect without restarting the server. Note that adding, removing, or changing tables and databases still needs a full server restart; this only refreshes the plain settings.",
+      "webEquivalent": "A reload-config button that re-applies settings from a config file at runtime.",
+      "notes": "This command is always available even if other commands are disabled, so a bad config can always be corrected and reloaded."
+    },
+    {
+      "title": "/skstorage migrate",
+      "excerpt": "Imports Skript variables from an older PatPeter SQLibrary database into SkStorage.",
+      "detail": "Brings your existing Skript variables over from a database created by the older PatPeter SQLibrary storage system. You point it at the old database file. By default it runs as a safe preview that shows what would be imported without changing anything; adding the confirmation flag performs the real import after you have made a backup.",
+      "webEquivalent": "A data import wizard with a dry-run preview before committing.",
+      "notes": "Usage: /skstorage migrate sqlibrary <path> [--i-have-backed-up]. Without the flag it only previews.",
+      "caveats": "Always back up your data before running the real import; the confirmation flag exists to make sure you have."
+    },
+    {
+      "title": "/skstorage flatline",
+      "excerpt": "Force-reloads a single player's saved data straight from disk.",
+      "detail": "Reloads one player's stored variables from disk, given their name or unique ID. This is useful if a player's data was changed directly on disk, or got out of sync, and you want the server to pick up the on-disk version again without restarting. It reports how many of that player's variables were reloaded.",
+      "webEquivalent": "A per-record cache refresh that re-reads a single user's data from the source of truth.",
+      "notes": "Only applies to tables that store each player in their own file (UUID-split tables).",
+      "caveats": "Has no effect for a player who has no data in any per-player split table."
+    },
+    {
+      "title": "/skstorage kill",
+      "excerpt": "Safely pauses the storage system so you can reload other plugins without a restart.",
+      "detail": "Temporarily shuts down the storage system: all real data is saved and its files are closed, then the plugin quietly diverts any further saves to a throwaway file. This lets you reload or update other plugins that touch the same files without stopping the server. Anything written while paused is discarded when you bring storage back with /skstorage alive.",
+      "webEquivalent": "Putting a service into maintenance mode so its files can be safely touched.",
+      "notes": "Console-only by default. Use /skstorage alive to resume. Data saved before the kill is safe.",
+      "caveats": "Variables changed while storage is killed are thrown away on revival by design; do not rely on saves made during this window."
+    },
+    {
+      "title": "/skstorage alive",
+      "excerpt": "Resumes the storage system after it was paused with /skstorage kill.",
+      "detail": "Brings storage back online after a /skstorage kill. The real data files are reopened and saving returns to normal. The temporary throwaway file used while paused is deleted (unless you have turned that cleanup off in the config), so anything written during the pause is discarded.",
+      "webEquivalent": "Taking a service out of maintenance mode and restoring normal operation.",
+      "notes": "Console-only by default. This command is always available so you can never get stuck in the killed state."
+    },
+    {
+      "title": "/skstorage merge",
+      "excerpt": "Combines one player's stored data into another player's, then removes the source.",
+      "detail": "Moves all of one player's saved variables onto another player, which is handy when someone's account identity changed and you want to carry their data over. You give a from player and a to player (by name or unique ID). Where both players already have the same piece of data, the destination player's version is kept. Because this deletes the source afterward, it asks for a one-time confirmation code that you must re-enter to proceed. It reports how many variables were moved.",
+      "webEquivalent": "An account merge tool that reassigns records from one account to another and deletes the old one.",
+      "notes": "You cannot merge a player into themselves.",
+      "caveats": "Destructive: the source player's data is deleted after the merge, and conflicts are always resolved in favor of the destination."
+    },
+    {
+      "title": "/skstorage route",
+      "excerpt": "Shows which storage table a given variable name would be saved to, without saving anything.",
+      "detail": "A troubleshooting tool for your table setup. You type a variable name and it tells you which table that variable would be stored in, which pattern matched it (and that pattern's priority), or a note explaining why it fell back to the default. Nothing is actually saved; it only explains the decision, which is helpful when checking that your patterns route variables the way you intended.",
+      "webEquivalent": "A routing or rule tester that shows which rule a request matches without executing it.",
+      "notes": "The variable name can contain spaces; everything after the subcommand is treated as the name."
+    },
+    {
+      "title": "Player Data Expression",
+      "excerpt": "Look up saved details about any player, such as their name, playtime, and join dates.",
+      "detail": "Lets you fetch a single piece of tracked information about a player, even one who is offline. You choose which detail you want and which player to read it from, and SkStorage returns the stored value. Available details are: uuid, name, first join, last join, last quit, playtime (total time played), sessions (how many times they have joined), last world (the world they were last in), and last ip hash (a scrambled, non-reversible fingerprint of their last address). First join, last join, and last quit come back as dates and times; playtime and sessions come back as numbers. If SkStorage has never seen the player, or the detail name is not one it recognises, nothing is returned.",
+      "webEquivalent": "Reading a field from a user's profile page, like the 'member since' and 'last seen' details shown on a forum account.",
+      "notes": "Names are matched loosely, so both 'first join' and 'firstjoin' work. The player metadata tracker must be enabled (playerdata.enabled in config) for any data to exist.",
+      "caveats": "Returns nothing for players who have never joined while tracking was active. The ip hash is a one-way fingerprint and cannot be turned back into a real address."
+    }
+  ]
+}

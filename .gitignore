@@ -1,16 +1,10 @@
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
+.buildlibs/
+server-jars/
 
 *.class
-*.iml
 .idea/
 .vscode/
 .DS_Store
-
-server-jars/
-strip_comments.py
-BUILD_CYCLE.md
 
 secret.key
 *.db
